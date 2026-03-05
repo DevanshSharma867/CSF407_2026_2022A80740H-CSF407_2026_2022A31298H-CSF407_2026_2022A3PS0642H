@@ -15,22 +15,15 @@ animate_ex1(grid, steps, out_dir)
 
 animate_ex2(grid, steps, out_dir)
     Animated dual-panel visualisation for Exercise 2.
-
-Both animate functions:
-  • Save every frame as a PNG inside out_dir/frames/
-  • Compile all frames into a GIF  →  out_dir/simulation.gif
-  • Try to compile MP4 via ffmpeg →  out_dir/simulation.mp4
 """
 
 import os
-import math
 import matplotlib
-matplotlib.use('Agg')   # Non-interactive backend for server / file output
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.patheffects as pe
 from matplotlib.patches import FancyArrowPatch
-import numpy as np
 
 import config
 from agent import Step
@@ -42,17 +35,13 @@ except ImportError:
     HAS_IMAGEIO = False
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  Color helpers
-# ══════════════════════════════════════════════════════════════════════════════
-
 _CELL_COLORS = {
-    config.CELL_LAND:    config.COLOR_LAND,
+    config.CELL_LAND: config.COLOR_LAND,
     config.CELL_VOLCANO: config.COLOR_VOLCANO,
-    config.CELL_WATER:   config.COLOR_WATER,
-    config.CELL_WALL:    config.COLOR_WALL,
-    config.CELL_START:   config.COLOR_START,
-    config.CELL_GOAL:    config.COLOR_GOAL,
+    config.CELL_WATER: config.COLOR_WATER,
+    config.CELL_WALL: config.COLOR_WALL,
+    config.CELL_START: config.COLOR_START,
+    config.CELL_GOAL: config.COLOR_GOAL,
 }
 
 
@@ -74,10 +63,6 @@ def _belief_color(probs):
     return config.COLOR_UNKNOWN
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  Low-level drawing primitives
-# ══════════════════════════════════════════════════════════════════════════════
-
 def _draw_grid_cells(ax, grid, path_set=None, highlight_cells=None):
     """Draw all cells of the grid on ax."""
     M = len(grid)
@@ -87,23 +72,20 @@ def _draw_grid_cells(ax, grid, path_set=None, highlight_cells=None):
 
     for r in range(M):
         for c in range(N):
-            ct    = grid[r][c]
+            ct = grid[r][c]
             color = _cell_color(ct)
-            # Slight highlight for path cells in ground truth view
             if (r, c) in path_set:
                 color = config.COLOR_PATH
 
             rect = plt.Rectangle((c - 0.5, r - 0.5), 1, 1,
-                                  color=color, ec='#333333', lw=0.8)
+                                 color=color, ec='#333333', lw=0.8)
             ax.add_patch(rect)
 
-            # Highlight border for special cells
             if (r, c) in highlight_cells:
                 rect2 = plt.Rectangle((c - 0.5, r - 0.5), 1, 1,
-                                       fill=False, ec='yellow', lw=3)
+                                      fill=False, ec='yellow', lw=3)
                 ax.add_patch(rect2)
 
-            # Cell label
             ax.text(c, r, ct, ha='center', va='center',
                     fontsize=7, fontweight='bold', color='white',
                     path_effects=[pe.withStroke(linewidth=1.5, foreground='black')])
@@ -113,29 +95,26 @@ def _draw_belief_cells(ax, belief_snap, scan_cells=None, damage_cells=None):
     """Draw belief-map cells (left panel of Ex2)."""
     M = config.GRID_ROWS
     N = config.GRID_COLS
-    scan_cells   = scan_cells   or set()
+    scan_cells = scan_cells or set()
     damage_cells = damage_cells or set()
 
     for r in range(M):
         for c in range(N):
             probs = belief_snap.get((r, c), {})
             color = _belief_color(probs)
-            rect  = plt.Rectangle((c - 0.5, r - 0.5), 1, 1,
-                                   color=color, ec='#333333', lw=0.8)
+            rect = plt.Rectangle((c - 0.5, r - 0.5), 1, 1,
+                                 color=color, ec='#333333', lw=0.8)
             ax.add_patch(rect)
 
-            # Yellow border for scanned cells
             if (r, c) in scan_cells:
                 rect2 = plt.Rectangle((c - 0.5, r - 0.5), 1, 1,
-                                       fill=False, ec=config.COLOR_SCAN_BORDER, lw=3)
+                                      fill=False, ec=config.COLOR_SCAN_BORDER, lw=3)
                 ax.add_patch(rect2)
 
-            # Damage marker
             if (r, c) in damage_cells:
-                ax.text(c, r, '✗', ha='center', va='center',
+                ax.text(c, r, 'X', ha='center', va='center',
                         fontsize=14, color='red', fontweight='bold')
 
-            # Risk percentage
             p_haz = probs.get(config.CELL_VOLCANO, 0) + probs.get(config.CELL_WATER, 0)
             ax.text(c, r - 0.28, f'{p_haz*100:.0f}%', ha='center', va='center',
                     fontsize=6, color='white',
@@ -144,7 +123,7 @@ def _draw_belief_cells(ax, belief_snap, scan_cells=None, damage_cells=None):
 
 def _setup_ax(ax, M, N, title):
     ax.set_xlim(-0.5, N - 0.5)
-    ax.set_ylim(M - 0.5, -0.5)   # invert y so (0,0) is top-left
+    ax.set_ylim(M - 0.5, -0.5)
     ax.set_aspect('equal')
     ax.set_xticks(range(N))
     ax.set_yticks(range(M))
@@ -155,38 +134,26 @@ def _setup_ax(ax, M, N, title):
 
 
 def _draw_arrow(ax, from_pos, to_pos, action, damage, alpha=1.0):
-    """
-    Draw a movement arrow on ax.
-
-    Spec-compliant arrow rules:
-      Walk (no damage)  → black straight arrow, solid
-      Jump (no damage)  → purple curved arrow, solid
-      Any action + damage → RED dashed/dotted arrow  (spec: "Damage: Red arrow
-        indicating loss of life. If the agent takes damage in a Turn, the arrow
-        drawn for that Turn must be dotted/dashed to represent limping/recovery")
-      Wall bounce       → orange dotted stub arrow (partial, no destination)
-      Scan              → thin dotted orange line to target cell
-    """
+    """Draw a movement arrow on ax representing the agent's action."""
     r1, c1 = from_pos
     r2, c2 = to_pos
 
-    # Spec rule: damage arrows are RED and dashed regardless of action type
     if damage:
-        arrow_color = config.COLOR_DAMAGE_ARROW   # red
-        ls          = '--'
-        lw          = 2.2
+        arrow_color = config.COLOR_DAMAGE_ARROW
+        ls = '--'
+        lw = 2.2
     elif action == 'walk':
-        arrow_color = config.COLOR_WALK_ARROW     # black
-        ls          = '-'
-        lw          = 2.0
+        arrow_color = config.COLOR_WALK_ARROW
+        ls = '-'
+        lw = 2.0
     elif action == 'jump':
-        arrow_color = config.COLOR_JUMP_ARROW     # purple
-        ls          = '-'
-        lw          = 2.0
+        arrow_color = config.COLOR_JUMP_ARROW
+        ls = '-'
+        lw = 2.0
     else:
         arrow_color = 'orange'
-        ls          = ':'
-        lw          = 1.5
+        ls = ':'
+        lw = 1.5
 
     if action == 'walk':
         ax.annotate('', xy=(c2, r2), xytext=(c1, r1),
@@ -201,10 +168,7 @@ def _draw_arrow(ax, from_pos, to_pos, action, damage, alpha=1.0):
                                     connectionstyle='arc3,rad=0.4'))
 
     elif action == 'wall_bounce':
-        # to_pos is the intended target (wall or blocked cell).
-        # Draw a short stub arrow going 40% of the way toward it,
-        # with an orange 'B' label to signal "blocked / bounced".
-        if (r1, c1) != (r2, c2):   # only draw if direction is known
+        if (r1, c1) != (r2, c2):
             mid_c = c1 + (c2 - c1) * 0.4
             mid_r = r1 + (r2 - r1) * 0.4
             ax.annotate('', xy=(mid_c, mid_r), xytext=(c1, r1),
@@ -218,12 +182,10 @@ def _draw_arrow(ax, from_pos, to_pos, action, damage, alpha=1.0):
                               alpha=0.75, lw=0.8))
 
     elif action == 'scan':
-        # Thin dotted orange line to scanned cell (no arrowhead)
         ax.plot([c1, c2], [r1, r2], color='orange', lw=1, ls=':', alpha=0.5)
 
     if damage:
-        # Red X marker at destination
-        ax.text(c2, r2 + 0.3, '✗', ha='center', va='center',
+        ax.text(c2, r2 + 0.3, 'X', ha='center', va='center',
                 fontsize=9, color='red', fontweight='bold', alpha=alpha)
 
 
@@ -239,10 +201,6 @@ def _hud_text(fig, step: Step, step_idx: int, total: int):
                  bbox=dict(boxstyle='round,pad=0.3', fc='#FFFDE7', ec='#CCAA00', alpha=0.9))
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  Static plots
-# ══════════════════════════════════════════════════════════════════════════════
-
 def plot_ground_truth(grid, path, anchors, out_path):
     """Save ground-truth trajectory plot as PNG."""
     M = len(grid)
@@ -253,21 +211,18 @@ def plot_ground_truth(grid, path, anchors, out_path):
     _draw_grid_cells(ax, grid, path_set=path_set)
     _setup_ax(ax, M, N, 'Ground-Truth Trajectory')
 
-    # Draw path arrows
     for i in range(1, len(path)):
         r1, c1 = path[i - 1]
         r2, c2 = path[i]
         ax.annotate('', xy=(c2, r2), xytext=(c1, r1),
                     arrowprops=dict(arrowstyle='->', color='black', lw=1.5))
 
-    # Mark anchors
     a1, a2 = anchors
     for a, label in [(a1, 'A1'), (a2, 'A2')]:
         ax.text(a[1], a[0], label, ha='center', va='center',
                 fontsize=8, color='black', fontweight='bold',
                 bbox=dict(boxstyle='circle', fc='white', ec='black', alpha=0.8))
 
-    # Legend
     legend_patches = [
         mpatches.Patch(color=config.COLOR_START,   label='Start (S)'),
         mpatches.Patch(color=config.COLOR_GOAL,    label='Goal (G)'),
@@ -283,7 +238,7 @@ def plot_ground_truth(grid, path, anchors, out_path):
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     plt.savefig(out_path, dpi=config.FIGURE_DPI, bbox_inches='tight')
     plt.close(fig)
-    print(f"  [✓] Ground-truth trajectory saved → {out_path}")
+    print(f"Ground-truth trajectory saved -> {out_path}")
 
 
 def plot_initial_grid(grid, out_path):
@@ -310,12 +265,8 @@ def plot_initial_grid(grid, out_path):
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     plt.savefig(out_path, dpi=config.FIGURE_DPI, bbox_inches='tight')
     plt.close(fig)
-    print(f"  [✓] Initial grid saved → {out_path}")
+    print(f"Initial grid saved -> {out_path}")
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  Animation — Exercise 1
-# ══════════════════════════════════════════════════════════════════════════════
 
 def animate_ex1(grid, steps, out_dir):
     """
@@ -329,14 +280,11 @@ def animate_ex1(grid, steps, out_dir):
 
     frame_paths = []
     damage_cells = set()
-    # Track actual agent position — wall_bounce keeps agent at from_pos
     agent_pos = (0, 0)
 
     for step_idx, step in enumerate(steps):
-        # Update agent position — wall_bounce does NOT move the agent
         if step.action in ('walk', 'jump'):
             agent_pos = step.to_pos
-        # wall_bounce: agent stays at from_pos
         elif step.action == 'wall_bounce':
             agent_pos = step.from_pos
 
@@ -344,33 +292,28 @@ def animate_ex1(grid, steps, out_dir):
         _draw_grid_cells(ax, grid)
         _setup_ax(ax, M, N, 'Oracle Agent — Exercise 1')
 
-        # Draw all arrows up to this step (walk, jump, wall_bounce)
         for s in steps[:step_idx + 1]:
             if s.action in ('walk', 'jump', 'wall_bounce'):
                 alpha = 1.0 if s == step else 0.45
                 _draw_arrow(ax, s.from_pos, s.to_pos, s.action, s.damage, alpha=alpha)
 
-        # Damage markers (persistent red X)
         if step.damage:
             damage_cells.add(step.to_pos)
         for dc in damage_cells:
-            ax.text(dc[1], dc[0], '✗', ha='center', va='center',
+            ax.text(dc[1], dc[0], 'X', ha='center', va='center',
                     fontsize=14, color='red', fontweight='bold')
 
-        # Agent position marker at actual position (from_pos for wall_bounce)
         r, c = agent_pos
         ax.plot(c, r, 'o', markersize=14, color=config.COLOR_AGENT,
                 markeredgecolor='white', markeredgewidth=1.5, zorder=5)
 
-        # Sensor info
-        t_str = 'T:✓' if step.sensor_thermal else 'T:✗'
-        s_str = 'S:✓' if step.sensor_seismic else 'S:✗'
+        t_str = 'T:T' if step.sensor_thermal else 'T:F'
+        s_str = 'S:T' if step.sensor_seismic else 'S:F'
         ax.text(c, r, f'{t_str}\n{s_str}', ha='center', va='center',
                 fontsize=5, color='white', fontweight='bold', zorder=6)
 
         _hud_text(fig, step, step_idx + 1, len(steps))
 
-        # Legend
         legend_patches = [
             mpatches.Patch(color='black',         label='Walk arrow'),
             mpatches.Patch(color='purple',        label='Jump arrow'),
@@ -389,20 +332,16 @@ def animate_ex1(grid, steps, out_dir):
         plt.close(fig)
         frame_paths.append(frame_path)
 
-    print(f"  [✓] {len(frame_paths)} frames saved to {frame_dir}")
+    print(f"{len(frame_paths)} frames saved to {frame_dir}")
     _compile_gif(frame_paths, os.path.join(out_dir, config.SIMULATION_GIF))
     _compile_mp4(frame_dir, os.path.join(out_dir, config.SIMULATION_MP4))
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  Animation — Exercise 2
-# ══════════════════════════════════════════════════════════════════════════════
-
 def animate_ex2(grid, steps, out_dir):
     """
     Render and save the Exercise-2 dual-panel simulation.
-    Left  → Belief map (agent's perspective)
-    Right → Ground truth
+    Left  -> Belief map (agent's perspective)
+    Right -> Ground truth
     """
     M = len(grid)
     N = len(grid[0])
@@ -412,22 +351,17 @@ def animate_ex2(grid, steps, out_dir):
     frame_paths  = []
     damage_cells = set()
     scan_cells   = set()
-    # Fix 2: persist ALL sensor readings ever recorded, keyed by (r,c)
-    scan_sensor_log: dict = {}   # {(r,c): (thermal_bool, seismic_bool)}
+    scan_sensor_log: dict = {}
 
-    # Track current agent position for scan frames (Fix 3)
     agent_pos = (0, 0)
 
     for step_idx, step in enumerate(steps):
         fig, (ax_belief, ax_truth) = plt.subplots(
             1, 2, figsize=(N * 2 + 4, M + 2))
 
-        # Update current agent position (on movement steps; scan steps don't move)
         if step.action in ('walk', 'jump', 'wall_bounce'):
             agent_pos = step.to_pos
-        # For scan steps, agent_pos stays wherever it was last
 
-        # ── LEFT: Belief map ─────────────────────────────────────────────
         if step.belief_snapshot:
             _draw_belief_cells(ax_belief, step.belief_snapshot,
                                scan_cells=scan_cells,
@@ -435,13 +369,11 @@ def animate_ex2(grid, steps, out_dir):
         else:
             _draw_grid_cells(ax_belief, grid)
 
-        # Track scanned cells and persist their sensor readings (Fix 2)
         if step.scan_cell:
             scan_cells.add(step.scan_cell)
             if step.sensor_thermal is not None:
                 scan_sensor_log[step.scan_cell] = (step.sensor_thermal, step.sensor_seismic)
 
-        # Fix 2: Draw persisted sensor labels on ALL ever-scanned cells
         for (sr, sc), (t_val, s_val) in scan_sensor_log.items():
             t_lbl = 'T:T' if t_val else 'T:F'
             s_lbl = 'S:T' if s_val else 'S:F'
@@ -452,14 +384,12 @@ def animate_ex2(grid, steps, out_dir):
                            fontsize=4.5, color='black', fontweight='bold',
                            bbox=dict(fc='yellow', ec='none', alpha=0.7, pad=0.5))
 
-        # Arrows on belief map (walk, jump, wall_bounce)
         for s in steps[:step_idx + 1]:
             if s.action in ('walk', 'jump', 'wall_bounce'):
                 alpha = 1.0 if s == step else 0.4
                 _draw_arrow(ax_belief, s.from_pos, s.to_pos,
                             s.action, s.damage, alpha=alpha)
 
-        # Fix 3: Agent dot always visible — on scan steps agent is at agent_pos
         ar, ac = agent_pos
         ax_belief.plot(ac, ar, 'o', markersize=13, color='#1E1E1E',
                        markeredgecolor='white', markeredgewidth=1.5, zorder=5)
@@ -471,7 +401,6 @@ def animate_ex2(grid, steps, out_dir):
 
         _setup_ax(ax_belief, M, N, 'Belief Map (Agent Perspective)')
 
-        # ── RIGHT: Ground truth ───────────────────────────────────────────
         _draw_grid_cells(ax_truth, grid)
 
         for s in steps[:step_idx + 1]:
@@ -481,10 +410,9 @@ def animate_ex2(grid, steps, out_dir):
                             s.action, s.damage, alpha=alpha)
 
         for dc in damage_cells:
-            ax_truth.text(dc[1], dc[0], '✗', ha='center', va='center',
+            ax_truth.text(dc[1], dc[0], 'X', ha='center', va='center',
                           fontsize=14, color='red', fontweight='bold')
 
-        # Agent marker on ground truth panel too
         ax_truth.plot(ac, ar, 'o', markersize=13, color='#1E1E1E',
                       markeredgecolor='white', markeredgewidth=1.5, zorder=5)
 
@@ -498,25 +426,21 @@ def animate_ex2(grid, steps, out_dir):
         plt.close(fig)
         frame_paths.append(frame_path)
 
-    print(f"  [✓] {len(frame_paths)} Ex2 frames saved to {frame_dir}")
+    print(f"{len(frame_paths)} Ex2 frames saved to {frame_dir}")
     _compile_gif(frame_paths, os.path.join(out_dir, config.SIMULATION_GIF))
     _compile_mp4(frame_dir, os.path.join(out_dir, config.SIMULATION_MP4))
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  Compile helpers
-# ══════════════════════════════════════════════════════════════════════════════
-
 def _compile_gif(frame_paths, out_path):
     if not HAS_IMAGEIO:
-        print("  [!] imageio not installed — skipping GIF compilation.")
+        print("imageio not installed — skipping GIF compilation.")
         return
     if not frame_paths:
         return
     images = [imageio.imread(f) for f in frame_paths]
     duration = config.GIF_FRAME_DURATION_MS / 1000.0
     imageio.mimsave(out_path, images, duration=duration, loop=0)
-    print(f"  [✓] GIF saved → {out_path}")
+    print(f"GIF saved -> {out_path}")
 
 
 def _compile_mp4(frame_dir, out_path):
@@ -534,8 +458,8 @@ def _compile_mp4(frame_dir, out_path):
     try:
         result = subprocess.run(cmd, capture_output=True, timeout=120)
         if result.returncode == 0:
-            print(f"  [✓] MP4 saved → {out_path}")
+            print(f"MP4 saved -> {out_path}")
         else:
-            print(f"  [!] ffmpeg failed: {result.stderr.decode()[:200]}")
+            print(f"ffmpeg failed: {result.stderr.decode()[:200]}")
     except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-        print(f"  [!] MP4 compilation skipped ({e})")
+        print(f"MP4 compilation skipped ({e})")

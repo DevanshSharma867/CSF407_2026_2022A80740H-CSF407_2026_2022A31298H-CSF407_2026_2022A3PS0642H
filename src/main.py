@@ -8,11 +8,11 @@ Usage:
 
 Workflow:
   1. Load configuration from config.py
-  2. Generate grid + ground-truth path  (grid_gen.py)
+  2. Generate grid + ground-truth path (grid_gen.py)
   3. Print cell IDs and grid to terminal
   4. Save ground-truth trajectory PNG and initial grid PNG
-  5. Run agent search  (agent.py)
-  6. Render and save animation  (visualizer.py)
+  5. Run agent search (agent.py)
+  6. Render and save animation (visualizer.py)
 """
 
 import os
@@ -24,19 +24,11 @@ import visualizer
 from agent import OracleAgent, ProbOracle
 
 
-# ─────────────────────────────────────────────
-#  Output directory setup
-# ─────────────────────────────────────────────
-
 def _setup_output_dirs(ex: int):
     base = os.path.join(config.OUTPUT_DIR, f'ex{ex}')
     os.makedirs(base, exist_ok=True)
     return base
 
-
-# ─────────────────────────────────────────────
-#  Helpers
-# ─────────────────────────────────────────────
 
 def _print_banner(text: str):
     bar = '═' * 60
@@ -60,7 +52,7 @@ def _print_step_log(steps, limit=20):
 
 def _print_final_report(steps):
     if not steps:
-        print("\n  ❌  No path found — agent failed to reach the goal.")
+        print("\nNo path found — agent failed to reach the goal.")
         return
     last = steps[-1]
     print(f"\n  {'─'*50}")
@@ -71,45 +63,36 @@ def _print_final_report(steps):
     print(f"  Turns used    : {last.turns_after}")
     print(f"  Time units    : {last.time_after}")
     print(f"  Final score   : {last.score:.4f}  (lower = more optimal)")
+    
     goal_reached = last.to_pos == (config.GRID_ROWS - 1, config.GRID_COLS - 1)
-    status = '✅ GOAL REACHED' if goal_reached else '❌ FAILED'
+    status = 'GOAL REACHED' if goal_reached else 'FAILED'
     print(f"  Outcome       : {status}")
     print(f"  {'─'*50}\n")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  Exercise 1 — Deterministic
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def run_exercise1(grid, path, anchors, hazard_map, out_dir):
     _print_banner('EXERCISE 1 — Deterministic Oracle Agent')
 
-    # ── Agent search ────────────────────────────────────────────────────────
-    print('\n  [*] Running A* search...')
+    print('\nRunning A* search...')
     agent = OracleAgent(grid)
     steps = agent.search()
 
     if steps:
-        print(f'  [✓] Path found in {len(steps)} steps.')
+        print(f'Path found in {len(steps)} steps.')
     else:
-        print('  [✗] No valid path found.')
+        print('No valid path found.')
 
     _print_step_log(steps)
     _print_final_report(steps)
 
-    # ── Visualise ─────────────────────────────────────────────────────────
     if steps:
-        print('\n  [*] Rendering animation frames...')
+        print('\nRendering animation frames...')
         ex1_out = os.path.join(out_dir, 'ex1')
         os.makedirs(ex1_out, exist_ok=True)
         visualizer.animate_ex1(grid, steps, ex1_out)
 
     return steps
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  Exercise 2 — Probabilistic
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def run_exercise2(grid, path, anchors, hazard_map, out_dir):
     _print_banner('EXERCISE 2 — Probabilistic Oracle Agent (Bayesian)')
@@ -120,23 +103,21 @@ def run_exercise2(grid, path, anchors, hazard_map, out_dir):
     print(f'    P(Land)    = {config.PRIOR_LAND:.2f}')
     print(f'    P(Wall)    = {config.PRIOR_WALL:.2f}')
 
-    # ── Agent search ────────────────────────────────────────────────────────
-    print('\n  [*] Running Bayesian A* search...')
+    print('\nRunning Bayesian A* search...')
     prob_agent = ProbOracle(grid)
     steps = prob_agent.search()
 
     if steps:
-        print(f'  [✓] Path found in {len(steps)} steps '
+        print(f'Path found in {len(steps)} steps '
               f'(including {sum(1 for s in steps if s.action == "scan")} scan steps).')
     else:
-        print('  [✗] No valid path found.')
+        print('No valid path found.')
 
     _print_step_log(steps)
     _print_final_report(steps)
 
-    # ── Visualise ─────────────────────────────────────────────────────────
     if steps:
-        print('\n  [*] Rendering dual-panel animation frames...')
+        print('\nRendering dual-panel animation frames...')
         ex2_out = os.path.join(out_dir, 'ex2')
         os.makedirs(ex2_out, exist_ok=True)
         visualizer.animate_ex2(grid, steps, ex2_out)
@@ -144,17 +125,10 @@ def run_exercise2(grid, path, anchors, hazard_map, out_dir):
     return steps
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  Main
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def main():
-    parser = argparse.ArgumentParser(
-        description='Oracle Agent — CS F407 AI Assignment')
-    parser.add_argument('--exercise', choices=['1', '2', 'both'],
-                        default='both', help='Which exercise to run')
-    parser.add_argument('--seed', type=int, default=None,
-                        help='Random seed for reproducibility')
+    parser = argparse.ArgumentParser(description='Oracle Agent — CS F407 AI Assignment')
+    parser.add_argument('--exercise', choices=['1', '2', 'both'], default='both', help='Which exercise to run')
+    parser.add_argument('--seed', type=int, default=None, help='Random seed for reproducibility')
     args = parser.parse_args()
 
     # Override seed from CLI if provided
@@ -169,7 +143,6 @@ def main():
     out_dir = config.OUTPUT_DIR
     os.makedirs(out_dir, exist_ok=True)
 
-    # ── Step 1: Configuration summary ─────────────────────────────────────
     _print_banner('ORACLE AGENT — CS F407 AI Assignment')
     print(f'\n  Configuration:')
     print(f'    Grid Size         : {config.GRID_ROWS} × {config.GRID_COLS}')
@@ -178,10 +151,10 @@ def main():
     print(f'    Jump cost         : {config.JUMP_TIME_COST} time + {config.TURN_COST} turn')
     print(f'    Random seed       : {config.RANDOM_SEED}')
 
-    # ── Step 2: Generate grid ──────────────────────────────────────────────
     _print_banner('GRID GENERATION')
-    print('\n  [*] Generating grid...')
+    print('\nGenerating grid...')
     grid = path = anchors = hazard_map = None
+    
     for attempt in range(10):
         try:
             grid, path, anchors, hazard_map = grid_gen.generate_grid()
@@ -189,28 +162,24 @@ def main():
         except RuntimeError as e:
             print(f"  [!] Grid gen attempt {attempt+1} failed: {e}, retrying...")
     else:
-        print("  [✗] Grid generation failed after 10 attempts. Try a different seed.")
+        print("Grid generation failed after 10 attempts. Try a different seed.")
         sys.exit(1)
+        
     a1, a2 = anchors
-    print(f'  [✓] Grid generated  ({config.GRID_ROWS}×{config.GRID_COLS})')
-    print(f'  [✓] Ground-truth path length : {len(path)} cells')
-    print(f'  [✓] Anchor cells : A1={a1}, A2={a2}')
-    print(f'  [✓] Path hazards : {hazard_map}')
+    print(f'Grid generated  ({config.GRID_ROWS}×{config.GRID_COLS})')
+    print(f'Ground-truth path length : {len(path)} cells')
+    print(f'Anchor cells : A1={a1}, A2={a2}')
+    print(f'Path hazards : {hazard_map}')
 
-    # ── Step 3: Print cell IDs ────────────────────────────────────────────
     grid_gen.print_cell_ids(grid)
-
-    # ── Step 4: Print initial grid ────────────────────────────────────────
     grid_gen.print_grid(grid, path=path, label='Initial Grid  ([ ] = path cell)')
 
-    # ── Step 5: Save static PNGs ──────────────────────────────────────────
     _print_banner('SAVING STATIC PLOTS')
-    gt_png   = os.path.join(out_dir, config.GROUND_TRUTH_PNG)
+    gt_png = os.path.join(out_dir, config.GROUND_TRUTH_PNG)
     init_png = os.path.join(out_dir, config.INITIAL_GRID_PNG)
     visualizer.plot_ground_truth(grid, path, anchors, gt_png)
     visualizer.plot_initial_grid(grid, init_png)
 
-    # ── Step 6: Run exercises ─────────────────────────────────────────────
     run_ex1 = args.exercise in ('1', 'both')
     run_ex2 = args.exercise in ('2', 'both')
 

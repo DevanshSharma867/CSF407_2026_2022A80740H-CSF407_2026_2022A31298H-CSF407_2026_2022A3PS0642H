@@ -14,15 +14,10 @@ import random
 import config
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  Shared helpers
-# ══════════════════════════════════════════════════════════════════════════════
+ORTHOGONAL_DELTAS = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 
-ORTHOGONAL_DELTAS = [(-1, 0), (1, 0), (0, -1), (0, 1)]   # up, down, left, right
-
-# ProbOracle belief thresholds (Bug 1: Fixed to 0.85)
-JUMP_WALL_BELIEF_THRESH = 0.85   # don't jump if P(mid=wall) >= this
-LAND_WALL_BELIEF_THRESH = 0.85   # don't walk/land if P(cell=wall) >= this
+JUMP_WALL_BELIEF_THRESH = 0.85
+LAND_WALL_BELIEF_THRESH = 0.85
 
 
 def _in_bounds(r, c):
@@ -41,27 +36,23 @@ def _manhattan(r1, c1, r2, c2):
     return abs(r1 - r2) + abs(c1 - c2)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  Step record — used by both agents for the visualiser
-# ══════════════════════════════════════════════════════════════════════════════
-
 class Step:
     def __init__(self, action, from_pos, to_pos, damage,
                  lives_after, turns_after, time_after,
                  sensor_thermal=None, sensor_seismic=None,
                  belief_snapshot=None, scan_cell=None):
-        self.action          = action
-        self.from_pos        = from_pos
-        self.to_pos          = to_pos
-        self.damage          = damage
-        self.lives_after     = lives_after
-        self.turns_after     = turns_after
-        self.time_after      = time_after
-        self.score           = (turns_after + time_after) / max(lives_after, 1)
-        self.sensor_thermal  = sensor_thermal
-        self.sensor_seismic  = sensor_seismic
+        self.action = action
+        self.from_pos = from_pos
+        self.to_pos = to_pos
+        self.damage = damage
+        self.lives_after = lives_after
+        self.turns_after = turns_after
+        self.time_after = time_after
+        self.score = (turns_after + time_after) / max(lives_after, 1)
+        self.sensor_thermal = sensor_thermal
+        self.sensor_seismic = sensor_seismic
         self.belief_snapshot = belief_snapshot
-        self.scan_cell       = scan_cell
+        self.scan_cell = scan_cell
 
     def __repr__(self):
         return (f"Step({self.action}: {self.from_pos}->{self.to_pos} "
@@ -69,19 +60,15 @@ class Step:
                 f"T={self.turns_after} t={self.time_after} score={self.score:.2f})")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  Exercise 1 — Deterministic Oracle Agent
-# ══════════════════════════════════════════════════════════════════════════════
-
 class OracleAgent:
     """
     Deterministic agent with full grid visibility.
     """
 
     def __init__(self, grid: list):
-        self.grid  = grid
+        self.grid = grid
         self.start = (0, 0)
-        self.goal  = (config.GRID_ROWS - 1, config.GRID_COLS - 1)
+        self.goal = (config.GRID_ROWS - 1, config.GRID_COLS - 1)
 
     def sense(self, r, c):
         thermal = seismic = False
@@ -104,13 +91,13 @@ class OracleAgent:
 
     def search(self):
         goal_r, goal_c = self.goal
-        sr, sc         = self.start
-        lives0         = config.AGENT_START_LIVES
+        sr, sc = self.start
+        lives0 = config.AGENT_START_LIVES
 
         h0 = self._h(sr, sc)
-        f0 = (h0) / max(lives0, 1)
+        f0 = h0 / max(lives0, 1)
 
-        heap    = [(f0, 0, 0, lives0, sr, sc, [(sr, sc, 'start', False)])]
+        heap = [(f0, 0, 0, lives0, sr, sc, [(sr, sc, 'start', False)])]
         visited = {}
 
         while heap:
@@ -133,12 +120,12 @@ class OracleAgent:
                 nr, nc = r + dr, c + dc
                 if _in_bounds(nr, nc):
                     ct = self.grid[nr][nc]
-                    if not _is_wall(ct): # Bug 7: Omniscient agent skips walls
-                        nt  = turns + config.TURN_COST
-                        nm  = time  + config.WALK_TIME_COST
-                        nl  = max(lives - self._life_penalty(ct), 0)
-                        g2  = nt + nm
-                        f2  = (g2 + self._h(nr, nc)) / max(nl, 1)
+                    if not _is_wall(ct):
+                        nt = turns + config.TURN_COST
+                        nm = time + config.WALK_TIME_COST
+                        nl = max(lives - self._life_penalty(ct), 0)
+                        g2 = nt + nm
+                        f2 = (g2 + self._h(nr, nc)) / max(nl, 1)
                         heapq.heappush(heap, (
                             f2, nt, nm, nl, nr, nc,
                             history + [(nr, nc, 'walk', _is_hazard(ct))]
@@ -146,16 +133,16 @@ class OracleAgent:
 
                 # JUMP
                 jr, jc = r + 2 * dr, c + 2 * dc
-                mr, mc = r + dr,     c + dc
+                mr, mc = r + dr, c + dc
                 if _in_bounds(jr, jc) and _in_bounds(mr, mc):
-                    mid_ct  = self.grid[mr][mc]
+                    mid_ct = self.grid[mr][mc]
                     land_ct = self.grid[jr][jc]
                     if not _is_wall(mid_ct) and not _is_wall(land_ct):
-                        nt  = turns + config.TURN_COST
-                        nm  = time  + config.JUMP_TIME_COST
-                        nl  = max(lives - self._life_penalty(land_ct), 0)
-                        g2  = nt + nm
-                        f2  = (g2 + self._h(jr, jc)) / max(nl, 1)
+                        nt = turns + config.TURN_COST
+                        nm = time + config.JUMP_TIME_COST
+                        nl = max(lives - self._life_penalty(land_ct), 0)
+                        g2 = nt + nm
+                        f2 = (g2 + self._h(jr, jc)) / max(nl, 1)
                         heapq.heappush(heap, (
                             f2, nt, nm, nl, jr, jc,
                             history + [(jr, jc, 'jump', _is_hazard(land_ct))]
@@ -167,7 +154,7 @@ class OracleAgent:
         steps = []
         lives = config.AGENT_START_LIVES
         turns = 0
-        time  = 0
+        time = 0
         agent_r, agent_c = history[0][0], history[0][1]
 
         for i, (r, c, action, dmg) in enumerate(history):
@@ -178,11 +165,11 @@ class OracleAgent:
 
             if action == 'walk':
                 turns += config.TURN_COST
-                time  += config.WALK_TIME_COST
+                time += config.WALK_TIME_COST
                 agent_r, agent_c = r, c
             elif action == 'jump':
                 turns += config.TURN_COST
-                time  += config.JUMP_TIME_COST
+                time += config.JUMP_TIME_COST
                 agent_r, agent_c = r, c
 
             if dmg:
@@ -191,45 +178,41 @@ class OracleAgent:
             thermal, seismic = self.sense(agent_r, agent_c)
 
             steps.append(Step(
-                action         = action,
-                from_pos       = (prev_r, prev_c),
-                to_pos         = (r, c),
-                damage         = dmg,
-                lives_after    = lives,
-                turns_after    = turns,
-                time_after     = time,
-                sensor_thermal = thermal,
-                sensor_seismic = seismic,
+                action=action,
+                from_pos=(prev_r, prev_c),
+                to_pos=(r, c),
+                damage=dmg,
+                lives_after=lives,
+                turns_after=turns,
+                time_after=time,
+                sensor_thermal=thermal,
+                sensor_seismic=seismic,
             ))
 
         return steps
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  Exercise 2 — Probabilistic Oracle Agent
-# ══════════════════════════════════════════════════════════════════════════════
-
 class BeliefCell:
     TYPES = [config.CELL_VOLCANO, config.CELL_WATER,
-             config.CELL_LAND,    config.CELL_WALL]
+             config.CELL_LAND, config.CELL_WALL]
 
     def __init__(self):
         self.probs = {
             config.CELL_VOLCANO: config.PRIOR_VOLCANO,
-            config.CELL_WATER:   config.PRIOR_WATER,
-            config.CELL_LAND:    config.PRIOR_LAND,
-            config.CELL_WALL:    config.PRIOR_WALL,
+            config.CELL_WATER: config.PRIOR_WATER,
+            config.CELL_LAND: config.PRIOR_LAND,
+            config.CELL_WALL: config.PRIOR_WALL,
         }
         self.scan_count = 0
-        self.blocked    = False
-        self.revealed   = False
+        self.blocked = False
+        self.revealed = False
 
     def bayesian_update(self, thermal: bool, seismic: bool):
         new_probs = {}
         for ct in self.TYPES:
             p_th, p_se = config.CPT[ct]
-            lh_th = p_th       if thermal  else (1.0 - p_th)
-            lh_se = p_se       if seismic  else (1.0 - p_se)
+            lh_th = p_th if thermal else (1.0 - p_th)
+            lh_se = p_se if seismic else (1.0 - p_se)
             new_probs[ct] = self.probs[ct] * lh_th * lh_se
 
         total = sum(new_probs.values())
@@ -241,8 +224,8 @@ class BeliefCell:
             self.blocked = True
 
     def set_known(self, true_type: str):
-        self.probs    = {ct: (1.0 if ct == true_type else 0.0)
-                         for ct in self.TYPES}
+        self.probs = {ct: (1.0 if ct == true_type else 0.0)
+                      for ct in self.TYPES}
         self.revealed = True
 
     @property
@@ -261,9 +244,9 @@ class ProbOracle:
     LIFE_HAZARD_WEIGHT = 6
 
     def __init__(self, grid: list):
-        self.grid  = grid
+        self.grid = grid
         self.start = (0, 0)
-        self.goal  = (config.GRID_ROWS - 1, config.GRID_COLS - 1)
+        self.goal = (config.GRID_ROWS - 1, config.GRID_COLS - 1)
 
         M, N = config.GRID_ROWS, config.GRID_COLS
         self.belief = [[BeliefCell() for _ in range(N)] for _ in range(M)]
@@ -311,14 +294,13 @@ class ProbOracle:
 
     def _plan(self, start_r, start_c, current_lives) -> list:
         """
-        Belief-only A* with lives tracking in state key (Bug 6).
+        Belief-only A* with lives tracking in state key.
         """
         goal_r, goal_c = self.goal
         h0 = self._h(start_r, start_c)
         f0 = h0 / max(current_lives, 1)
 
-        # Heap: (f, g, cur_lives, r, c, path)
-        heap    = [(f0, 0.0, current_lives, start_r, start_c, [(start_r, start_c, 'start')])]
+        heap = [(f0, 0.0, current_lives, start_r, start_c, [(start_r, start_c, 'start')])]
         visited = {}
 
         while heap:
@@ -327,7 +309,7 @@ class ProbOracle:
             if (r, c) == (goal_r, goal_c):
                 return path
 
-            state = (r, c, cl) # Bug 6: lives in state key
+            state = (r, c, cl)
             if state in visited and visited[state] <= g:
                 continue
             visited[state] = g
@@ -337,27 +319,25 @@ class ProbOracle:
                 nr, nc = r + dr, c + dc
                 if _in_bounds(nr, nc):
                     bc = self.belief[nr][nc]
-                    # Bug 1: LAND_WALL_BELIEF_THRESH is 0.85
                     if bc.p_wall < LAND_WALL_BELIEF_THRESH:
-                        eg  = g + self._edge_cost(nr, nc, 'walk')
-                        # Bug 6: Integer approximation for expected lives
+                        eg = g + self._edge_cost(nr, nc, 'walk')
                         nl = max(cl - (1 if bc.p_hazard > 0.5 else 0), 1)
-                        f2  = (eg + self._h(nr, nc)) / max(nl, 1)
+                        f2 = (eg + self._h(nr, nc)) / max(nl, 1)
                         heapq.heappush(heap, (
                             f2, eg, nl, nr, nc, path + [(nr, nc, 'walk')]
                         ))
 
                 # JUMP
                 jr, jc = r + 2 * dr, c + 2 * dc
-                mr, mc = r + dr,     c + dc
+                mr, mc = r + dr, c + dc
                 if _in_bounds(jr, jc) and _in_bounds(mr, mc):
-                    mid_bc  = self.belief[mr][mc]
+                    mid_bc = self.belief[mr][mc]
                     land_bc = self.belief[jr][jc]
                     if (mid_bc.p_wall < JUMP_WALL_BELIEF_THRESH and
                         land_bc.p_wall < LAND_WALL_BELIEF_THRESH):
-                        eg  = g + self._edge_cost(jr, jc, 'jump')
+                        eg = g + self._edge_cost(jr, jc, 'jump')
                         nl = max(cl - (1 if land_bc.p_hazard > 0.5 else 0), 1)
-                        f2  = (eg + self._h(jr, jc)) / max(nl, 1)
+                        f2 = (eg + self._h(jr, jc)) / max(nl, 1)
                         heapq.heappush(heap, (
                             f2, eg, nl, jr, jc, path + [(jr, jc, 'jump')]
                         ))
@@ -379,15 +359,17 @@ class ProbOracle:
             return (from_r, from_c, lives, config.WALL_TURN_COST, 0, False, True)
 
         true_ct = self.grid[to_r][to_c]
-        damage  = _is_hazard(true_ct)
+        damage = _is_hazard(true_ct)
         new_lives = max(lives - (1 if damage else 0), 0)
 
         td, md = (config.TURN_COST, config.WALK_TIME_COST) if action == 'walk' else \
                  (config.TURN_COST, config.JUMP_TIME_COST)
 
         reveal = true_ct
-        if reveal in (config.CELL_START, config.CELL_GOAL): reveal = config.CELL_LAND
-        if reveal in BeliefCell.TYPES: self.belief[to_r][to_c].set_known(reveal)
+        if reveal in (config.CELL_START, config.CELL_GOAL):
+            reveal = config.CELL_LAND
+        if reveal in BeliefCell.TYPES:
+            self.belief[to_r][to_c].set_known(reveal)
 
         return (to_r, to_c, new_lives, td, md, damage, False)
 
@@ -402,10 +384,10 @@ class ProbOracle:
                 break
 
             plan = self._plan(r, c, lives)
-            if len(plan) < 2: break
+            if len(plan) < 2:
+                break
             next_r, next_c, next_action = plan[1]
 
-            # Bug 5: Removed scanned_this_cycle logic to allow full scan budget
             bc_next = self.belief[next_r][next_c]
             while (bc_next.p_hazard > config.RISK_SCAN_THRESHOLD and
                    not bc_next.blocked and not bc_next.revealed):
@@ -415,17 +397,19 @@ class ProbOracle:
                     steps.append(Step('scan', (r, c), (next_r, next_c), False, lives,
                                       turns, time, thermal, seismic, self._snapshot(), (next_r, next_c)))
                     plan = self._plan(r, c, lives)
-                    if len(plan) < 2: break
+                    if len(plan) < 2:
+                        break
                     next_r, next_c, next_action = plan[1]
                     bc_next = self.belief[next_r][next_c]
                 else:
                     break
 
-            if len(plan) < 2: break
+            if len(plan) < 2:
+                break
             ar, ac, new_lives, td, md, damage, bounced = self._execute_step(r, c, next_r, next_c, next_action, lives)
             turns += td
-            time  += md
-            lives  = new_lives
+            time += md
+            lives = new_lives
 
             if bounced:
                 steps.append(Step('wall_bounce', (r, c), (next_r, next_c), False, lives, turns, time, belief_snapshot=self._snapshot()))

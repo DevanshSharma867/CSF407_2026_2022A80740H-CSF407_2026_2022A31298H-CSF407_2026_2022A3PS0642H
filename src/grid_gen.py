@@ -3,22 +3,18 @@ grid_gen.py
 Grid generation for Oracle Agent — CS F407 AI Assignment
 
 Algorithm:
-  1. Pick two anchor cells using full-grid rejection sampling (Bug 9).
+  1. Pick two anchor cells using full-grid rejection sampling.
   2. Connect Start→A1→A2→Goal using a randomised Manhattan walk:
        At each step, randomly choose horizontal or vertical movement (with shuffled direction
        preference), giving a different corridor every run.
   3. Place exactly 2 Volcanoes and 2 Waters on the path (non-adjacent to each other).
-     Anchors are protected (Bug 2).
+     Anchors are protected.
   4. Fill remaining non-path cells: 50% hazardous, 40% land, 10% wall.
 """
 
 import random
 import config
 
-
-# ─────────────────────────────────────────────
-#  Internal helpers
-# ─────────────────────────────────────────────
 
 def _random_walk_path(start: tuple, end: tuple, forbidden: set) -> list:
     """
@@ -57,7 +53,7 @@ def _random_walk_path(start: tuple, end: tuple, forbidden: set) -> list:
                 nr, nc = r, c + delta
 
             if 0 <= nr < config.GRID_ROWS and 0 <= nc < config.GRID_COLS:
-                if (nr, nc) not in forbidden:  # Bug 9: respect forbidden cells
+                if (nr, nc) not in forbidden:
                     r, c = nr, nc
                     if (r, c) not in path:
                         path.append((r, c))
@@ -67,19 +63,16 @@ def _random_walk_path(start: tuple, end: tuple, forbidden: set) -> list:
         if not moved:
             break
 
-    return path  # does NOT include `end`; caller appends next segment
+    return path
 
 
 def _build_full_path(start, a1, a2, goal, max_attempts=500):
     """
     Concatenate three segments: start→a1, a1→a2, a2→goal.
-    Bug 10: Added retry logic and RuntimeError.
-    Bug 3: Use empty forbidden sets to increase success rate.
+    Includes retry logic if a connected path cannot be formed.
     """
     for attempt in range(max_attempts):
-        # Bug 3: Use empty forbidden sets for segments
         seg1 = _random_walk_path(start, a1, set())
-        # The function returns path excluding end. Let's check if we can reach end from last path element.
         lr, lc = seg1[-1]
         if abs(lr - a1[0]) + abs(lc - a1[1]) != 1 and (lr, lc) != a1:
             continue
@@ -95,9 +88,9 @@ def _build_full_path(start, a1, a2, goal, max_attempts=500):
             continue
 
         # Combine, appending junction points correctly
-        # Since _random_walk_path excludes end, we append the junctions manually
         full = seg1 + [a1] + seg2[1:] + [a2] + seg3[1:] + [goal]
-        # Remove any potential adjacent duplicates if any segment was empty or start==end
+        
+        # Remove any potential adjacent duplicates
         unique_full = []
         for p in full:
             if not unique_full or p != unique_full[-1]:
@@ -112,11 +105,11 @@ def _build_full_path(start, a1, a2, goal, max_attempts=500):
 def _place_hazards_on_path(path: list, a1: tuple, a2: tuple) -> dict:
     """
     Place exactly 2 Volcanoes and 2 Waters on interior path cells
-    (never on start or goal or anchors), ensuring no two hazards are adjacent in the path list.
+    (never on start or goal or anchors), ensuring no two hazards are adjacent.
 
     Returns dict: {(r,c): cell_type}
     """
-    protected = {path[0], path[-1], a1, a2} # Bug 2: protect anchors
+    protected = {path[0], path[-1], a1, a2}
     interior = [cell for cell in path if cell not in protected]
     
     if len(interior) < 4:
@@ -126,7 +119,6 @@ def _place_hazards_on_path(path: list, a1: tuple, a2: tuple) -> dict:
                    [config.CELL_WATER] * config.WATERS_ON_PATH
     random.shuffle(hazard_types)
 
-    # Re-using the logic from interior but we need the indices in the full path for adjacency check
     path_indices = [i for i, cell in enumerate(path) if cell in interior]
     
     assigned = {}
@@ -140,7 +132,6 @@ def _place_hazards_on_path(path: list, a1: tuple, a2: tuple) -> dict:
             last_hazard_idx = idx
 
     if len(assigned) < 4:
-        # Relaxed retry
         assigned = {}
         candidates = path_indices[:]
         random.shuffle(candidates)
@@ -172,10 +163,8 @@ def _fill_non_path_cells(grid: list, path_set: set):
     n = len(non_path)
     n_hazard = round(n * config.NON_PATH_HAZARD_RATIO)
     n_land   = round(n * config.NON_PATH_LAND_RATIO)
-    # wall gets the rest
     n_wall   = n - n_hazard - n_land
 
-    # Split hazard equally between V and W
     half_h = n_hazard // 2
     cell_types = (
         [config.CELL_VOLCANO] * half_h +
@@ -189,10 +178,6 @@ def _fill_non_path_cells(grid: list, path_set: set):
         grid[r][c] = ct
 
 
-# ─────────────────────────────────────────────
-#  Public API
-# ─────────────────────────────────────────────
-
 def generate_grid():
     """
     Generate a unique MxN grid with a guaranteed safe path.
@@ -201,14 +186,13 @@ def generate_grid():
     -------
     grid        : list[list[str]]  — 2-D grid of cell types
     path        : list[tuple]      — ground-truth trajectory [(r,c), ...]
-    anchors     : (a1, a2)        — the two intermediate anchor cells
+    anchors     : (a1, a2)         — the two intermediate anchor cells
     hazard_map  : dict             — {(r,c): 'V'|'W'} hazards placed on path
     """
     M, N = config.GRID_ROWS, config.GRID_COLS
     start = (0, 0)
     goal  = (M - 1, N - 1)
 
-    # ── 1. Pick anchor cells (Bug 9: Rejection Sampling) ──────────────────
     candidates = [
         (r, c)
         for r in range(M)
@@ -220,31 +204,25 @@ def generate_grid():
     found_anchors = False
     for _ in range(50_000):
         a1, a2 = random.sample(candidates, 2)
-        if a1[0] == a2[0]: continue          # must not share row
-        if a1[1] == a2[1]: continue          # must not share column
-        if abs(a1[0]-a2[0]) + abs(a1[1]-a2[1]) <= 1: continue  # must not be adjacent
+        if a1[0] == a2[0]: continue
+        if a1[1] == a2[1]: continue
+        if abs(a1[0]-a2[0]) + abs(a1[1]-a2[1]) <= 1: continue
         found_anchors = True
         break
     
     if not found_anchors:
         raise RuntimeError("Failed to find suitable anchor cells.")
 
-    # ── 2. Build randomised path ──────────────────────────────────────────
     path = _build_full_path(start, a1, a2, goal)
-
     path_set = set(path)
 
-    # ── 3. Place hazards on path ──────────────────────────────────────────
     hazard_map = _place_hazards_on_path(path, a1, a2)
 
-    # ── 4. Build grid ─────────────────────────────────────────────────────
     grid = [[config.CELL_LAND] * N for _ in range(M)]
 
-    # Mark start and goal
     grid[start[0]][start[1]] = config.CELL_START
     grid[goal[0]][goal[1]]   = config.CELL_GOAL
 
-    # Mark path cells (Land unless hazard)
     for (r, c) in path:
         if (r, c) == start or (r, c) == goal:
             continue
@@ -253,10 +231,8 @@ def generate_grid():
         else:
             grid[r][c] = config.CELL_LAND
 
-    # ── 5. Fill non-path cells ─────────────────────────────────────────────
     _fill_non_path_cells(grid, path_set)
 
-    # Re-stamp start/goal (fill may have overwritten them)
     grid[start[0]][start[1]] = config.CELL_START
     grid[goal[0]][goal[1]]   = config.CELL_GOAL
 
@@ -264,7 +240,7 @@ def generate_grid():
 
 
 def print_grid(grid: list, path: list = None, label: str = "Grid"):
-    """Pretty-print the grid to the terminal with optional path highlight."""
+    """Print the grid to the terminal with optional path highlight."""
     M = len(grid)
     N = len(grid[0]) if M > 0 else 0
     path_set = set(path) if path else set()
@@ -273,7 +249,6 @@ def print_grid(grid: list, path: list = None, label: str = "Grid"):
     print(f"  {label}  ({M}×{N})")
     print(f"{'═'*50}")
 
-    # Column header
     print("     " + "  ".join(f"{c:2d}" for c in range(N)))
     print("    " + "─" * (N * 4))
 
